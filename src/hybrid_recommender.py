@@ -107,7 +107,7 @@ class HybridRecommender:
         # --- Optimise weights on validation set (if needed) --------------
         if not manual_weights and val_df is not None:
             self._weights = self._optimise_weights(val_df)
-        
+
         print(
             f"  [Hybrid] Blending weights — "
             f"KNN: {self._weights[0]:.3f}  "
