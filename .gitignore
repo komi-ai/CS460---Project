@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data – large binary files should not be committed
+data/*.zip
+data/ml-100k/
+data/ml-1m/
+
+# Output artefacts
+results.png
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
