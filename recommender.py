@@ -1,4 +1,5 @@
 import argparse
+import json
 import time
 import zipfile
 from pathlib import Path
@@ -170,12 +171,36 @@ def main():
     parser.add_argument(
         "--models",
         nargs="+",
-        default=["knn", "svd", "hybrid"],
+        default=["knn", "svd"],
         choices=["knn", "svd", "als", "hybrid"]
     )
 
     args = parser.parse_args()
-    #call a run all method
+
+    results = []
+    for dataset_name in args.datasets:
+        print(f"Loading dataset {dataset_name}...")
+        df = load_data(dataset_name)
+        num_ratings, num_users, num_items = get_stats(df)
+        print(f"Dataset {dataset_name}: {num_ratings} ratings, {num_users} users, {num_items} items")
+
+        for model_name in args.models:
+            print(f"Running {model_name} on {dataset_name}...")
+            if model_name == "knn":
+                result = run_knn(df, dataset_name)
+            elif model_name == "svd":
+                result = run_svd(df, dataset_name)
+            else:
+                print(f"Model {model_name} not implemented yet, skipping.")
+                continue
+            results.append(result)
+            print(f"Results: {result}")
+
+    # Save results
+    results_file = RESULTS_DIR / "results.json"
+    with open(results_file, "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"Results saved to {results_file}")
 
 
 if __name__ == "__main__":
