@@ -1,0 +1,184 @@
+import argparse
+import time
+import zipfile
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import requests
+from sklearn.model_selection import train_test_split
+
+DATA_DIR = Path("data")
+RESULTS_DIR = Path("results")
+
+URLS = {
+    "100k": "https://files.grouplens.org/datasets/movielens/ml-100k.zip",
+    "1m": "https://files.grouplens.org/datasets/movielens/ml-1m.zip",
+    #"10m": "https://files.grouplens.org/datasets/movielens/ml-10m.zip", if we have time we can try the larger set
+}
+
+def make_folders():
+    # Create folders
+    DATA_DIR.mkdir(exist_ok=True)
+    RESULTS_DIR.mkdir(exist_ok=True)
+
+
+def download_dataset(name):
+    # Download dataset
+    zip_path = DATA_DIR / f"ml-{name}.zip"
+    folder_path = DATA_DIR / f"ml-{name}"
+
+    if not zip_path.exists():
+        print(f"Downloading MovieLens {name}...")
+        r = requests.get(URLS[name], timeout=120)
+        r.raise_for_status()
+        with open(zip_path, "wb") as f:
+            f.write(r.content)
+
+    if not folder_path.exists():
+        print(f"Extracting MovieLens {name}...")
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(DATA_DIR)
+
+    return folder_path
+
+def load_data(name):
+    # Load data
+    folder = download_dataset(name)
+
+    if name == "100k":
+        df = pd.read_csv(
+            folder / "u.data",
+            sep="\t",
+            names=["user_id", "item_id", "rating", "timestamp"]
+        )
+    else:
+        df = pd.read_csv(
+            folder / "ratings.dat",
+            sep="::",
+            engine="python",
+            names=["user_id", "item_id", "rating", "timestamp"]
+        )
+
+    df["user_id"] = df["user_id"].astype(int)
+    df["item_id"] = df["item_id"].astype(int)
+    df["rating"] = df["rating"].astype(float)
+    return df
+
+def get_stats(df):
+    # Get stats
+    return len(df), df["user_id"].nunique(), df["item_id"].nunique()
+
+
+def calc_rmse_mae(y_true, y_pred):
+    # Calc errors
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
+    mae = np.mean(np.abs(y_true - y_pred))
+    return rmse, mae
+
+
+def make_surprise_data(df):
+    # Prep data
+    from surprise import Dataset, Reader
+
+    train_df, test_df = train_test_split(df[["user_id", "item_id", "rating"]], test_size=0.2, random_state=42)
+
+    reader = Reader(rating_scale=(1, 5))
+    data = Dataset.load_from_df(train_df, reader)
+    trainset = data.build_full_trainset()
+    testset = list(test_df.itertuples(index=False, name=None))
+
+    return trainset, testset
+
+def run_knn(df, dataset_name):
+    # KNN model
+    from surprise import KNNBaseline, accuracy
+
+    trainset, testset = make_surprise_data(df)
+
+    model = KNNBaseline(
+        k=40,
+        sim_options={"name": "pearson_baseline", "user_based": False},
+        verbose=False
+    )
+
+    start_train = time.time()
+    model.fit(trainset)
+    train_time = time.time() - start_train
+
+    start_test = time.time()
+    preds = model.test(testset)
+    test_time = time.time() - start_test
+
+    rmse = accuracy.rmse(preds, verbose=False)
+    mae = accuracy.mae(preds, verbose=False)
+
+    return {
+        "dataset": dataset_name,
+        "model": "KNN",
+        "rmse": rmse,
+        "mae": mae,
+        "train_time": train_time,
+        "test_time": test_time,
+    }
+    
+def run_svd(df, dataset_name):
+    # SVD model
+    from surprise import SVD, accuracy
+
+    trainset, testset = make_surprise_data(df)
+
+    model = SVD(n_factors=100, n_epochs=20, random_state=42)
+
+    start_train = time.time()
+    model.fit(trainset)
+    train_time = time.time() - start_train
+
+    start_test = time.time()
+    preds = model.test(testset)
+    test_time = time.time() - start_test
+
+    rmse = accuracy.rmse(preds, verbose=False)
+    mae = accuracy.mae(preds, verbose=False)
+
+    return {
+        "dataset": dataset_name,
+        "model": "SVD",
+        "rmse": rmse,
+        "mae": mae,
+        "train_time": train_time,
+        "test_time": test_time,
+    }
+    #hybrid
+    
+    #als
+    
+    
+def main():
+    # Main func
+    make_folders()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--datasets",
+        nargs="+",
+        default=["100k"],
+        choices=["100k", "1m"]
+    )
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        default=["knn", "svd", "hybrid"],
+        choices=["knn", "svd", "als", "hybrid"]
+    )
+
+    args = parser.parse_args()
+    #call a run all method
+
+
+if __name__ == "__main__":
+    main()
+
+
