@@ -152,7 +152,7 @@ def run_svd(df, dataset_name):
         "train_time": train_time,
         "test_time": test_time,
     }
-    #Hybrid model
+    # Hybrid model
 def run_hybrid(df, dataset_name):
     from surprise import KNNBaseline, SVD
 
@@ -200,7 +200,7 @@ def run_hybrid(df, dataset_name):
     
     
 def main():
-    # Main func
+    # Main to run all models
     make_folders()
 
     parser = argparse.ArgumentParser()
