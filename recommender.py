@@ -152,7 +152,49 @@ def run_svd(df, dataset_name):
         "train_time": train_time,
         "test_time": test_time,
     }
-    #hybrid
+    #Hybrid model
+def run_hybrid(df, dataset_name):
+    from surprise import KNNBaseline, SVD
+
+    trainset, testset = make_surprise_data(df)
+
+    knn = KNNBaseline(
+        k=40,
+        sim_options={"name": "pearson_baseline", "user_based": False},
+        verbose=False
+    )
+    svd = SVD(n_factors=100, n_epochs=20, random_state=42)
+
+    start_train = time.time()
+    knn.fit(trainset)
+    svd.fit(trainset)
+    train_time = time.time() - start_train
+
+    alpha = 0.7
+    y_true = []
+    y_pred = []
+
+    start_test = time.time()
+    for uid, iid, true_r in testset:
+        knn_pred = knn.predict(uid, iid).est
+        svd_pred = svd.predict(uid, iid).est
+        final_pred = alpha * svd_pred + (1 - alpha) * knn_pred
+        final_pred = max(1, min(5, final_pred))
+
+        y_true.append(true_r)
+        y_pred.append(final_pred)
+
+    test_time = time.time() - start_test
+    rmse, mae = calc_rmse_mae(y_true, y_pred)
+
+    return {
+        "dataset": dataset_name,
+        "model": "Hybrid",
+        "rmse": rmse,
+        "mae": mae,
+        "train_time": train_time,
+        "test_time": test_time,
+    }
     
     #als
     
@@ -190,6 +232,8 @@ def main():
                 result = run_knn(df, dataset_name)
             elif model_name == "svd":
                 result = run_svd(df, dataset_name)
+            elif model_name == "hybrid":
+                result = run_hybrid(df, dataset_name)
             else:
                 print(f"Model {model_name} not implemented yet, skipping.")
                 continue
