@@ -197,6 +197,52 @@ def run_hybrid(df, dataset_name):
     }
     
     #als
+def run_als(df, dataset_name):
+    from pyspark.sql import SparkSession
+    from pyspark.ml.recommendation import ALS
+
+    spark = (
+        SparkSession.builder
+        .appName("MovieLensALS")
+        .master("local[*]")
+        .getOrCreate()
+    )
+    spark.sparkContext.setLogLevel("ERROR")
+
+    sdf = spark.createDataFrame(df[["user_id", "item_id", "rating"]])
+    train_df, test_df = sdf.randomSplit([0.8, 0.2], seed=42)
+
+    als = ALS(
+        userCol="user_id",
+        itemCol="item_id",
+        ratingCol="rating",
+        rank=50,
+        maxIter=10,
+        regParam=0.1,
+        coldStartStrategy="drop",
+        seed=42
+    )
+
+    start_train = time.time()
+    model = als.fit(train_df)
+    train_time = time.time() - start_train
+
+    start_test = time.time()
+    preds = model.transform(test_df).dropna(subset=["prediction"]).toPandas()
+    test_time = time.time() - start_test
+
+    spark.stop()
+
+    rmse, mae = calc_rmse_mae(preds["rating"], preds["prediction"])
+
+    return {
+        "dataset": dataset_name,
+        "model": "ALS",
+        "rmse": rmse,
+        "mae": mae,
+        "train_time": train_time,
+        "test_time": test_time,
+    }
     
     
 def main():
@@ -213,7 +259,7 @@ def main():
     parser.add_argument(
         "--models",
         nargs="+",
-        default=["knn", "svd"],
+        default=["knn", "svd", "als"],
         choices=["knn", "svd", "als", "hybrid"]
     )
 
@@ -234,6 +280,8 @@ def main():
                 result = run_svd(df, dataset_name)
             elif model_name == "hybrid":
                 result = run_hybrid(df, dataset_name)
+            elif model_name == "als":
+                result = run_als(df, dataset_name)
             else:
                 print(f"Model {model_name} not implemented yet, skipping.")
                 continue
