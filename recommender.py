@@ -19,13 +19,13 @@ URLS = {
 }
 
 def make_folders():
-    # Create folders
+    # Make sure the project has places to store the downloaded data and output files
     DATA_DIR.mkdir(exist_ok=True)
     RESULTS_DIR.mkdir(exist_ok=True)
 
 
 def download_dataset(name):
-    # Download dataset
+    # Download the selected MovieLens dataset once, then reuse the local copy
     zip_path = DATA_DIR / f"ml-{name}.zip"
     folder_path = DATA_DIR / f"ml-{name}"
 
@@ -44,7 +44,7 @@ def download_dataset(name):
     return folder_path
 
 def load_data(name):
-    # Load data
+    # Load ratings into a Dataframe
     folder = download_dataset(name)
 
     if name == "100k":
@@ -67,12 +67,11 @@ def load_data(name):
     return df
 
 def get_stats(df):
-    # Get stats
+    # Basic counts for printing a quick summary 
     return len(df), df["user_id"].nunique(), df["item_id"].nunique()
 
 
 def calc_rmse_mae(y_true, y_pred):
-    # Calc errors
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
     rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
@@ -81,7 +80,7 @@ def calc_rmse_mae(y_true, y_pred):
 
 
 def make_surprise_data(df):
-    # Prep data
+    # Surprise expects a specific train/test format
     from surprise import Dataset, Reader
 
     train_df, test_df = train_test_split(df[["user_id", "item_id", "rating"]], test_size=0.2, random_state=42)
@@ -94,7 +93,7 @@ def make_surprise_data(df):
     return trainset, testset
 
 def run_knn(df, dataset_name):
-    # KNN model
+    # KNNBaseline compares an item to similar items that users have already rated
     from surprise import KNNBaseline, accuracy
 
     trainset, testset = make_surprise_data(df)
@@ -124,9 +123,9 @@ def run_knn(df, dataset_name):
         "train_time": train_time,
         "test_time": test_time,
     }
-    
+
 def run_svd(df, dataset_name):
-    # SVD model
+    # SVD is a matrix factorization approach that learns latent user/item features
     from surprise import SVD, accuracy
 
     trainset, testset = make_surprise_data(df)
@@ -152,8 +151,9 @@ def run_svd(df, dataset_name):
         "train_time": train_time,
         "test_time": test_time,
     }
-    # Hybrid model
+
 def run_hybrid(df, dataset_name):
+    # This hybrid blends SVD and KNN
     from surprise import KNNBaseline, SVD
 
     trainset, testset = make_surprise_data(df)
@@ -170,6 +170,7 @@ def run_hybrid(df, dataset_name):
     svd.fit(trainset)
     train_time = time.time() - start_train
 
+    # Alpha controls how much weight we give to SVD versus KNN
     alpha = 0.7
     y_true = []
     y_pred = []
@@ -195,9 +196,9 @@ def run_hybrid(df, dataset_name):
         "train_time": train_time,
         "test_time": test_time,
     }
-    
-    #als
+
 def run_als(df, dataset_name):
+    # ALS is run with Spark 
     from pyspark.sql import SparkSession
     from pyspark.ml.recommendation import ALS
 
@@ -209,6 +210,7 @@ def run_als(df, dataset_name):
     )
     spark.sparkContext.setLogLevel("ERROR")
 
+    # Spark uses its own Dataframe type so the pandas data has to be converted
     sdf = spark.createDataFrame(df[["user_id", "item_id", "rating"]])
     train_df, test_df = sdf.randomSplit([0.8, 0.2], seed=42)
 
@@ -243,10 +245,10 @@ def run_als(df, dataset_name):
         "train_time": train_time,
         "test_time": test_time,
     }
-    
-    
+
+
 def main():
-    # Main to run all models
+    # Parse arguments, run the requested experiments, and save the metrics
     make_folders()
 
     parser = argparse.ArgumentParser()
@@ -288,7 +290,7 @@ def main():
             results.append(result)
             print(f"Results: {result}")
 
-    # Save results
+    # Save everything in one JSON file 
     results_file = RESULTS_DIR / "results.json"
     with open(results_file, "w") as f:
         json.dump(results, f, indent=2)
